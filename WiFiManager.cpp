@@ -12,6 +12,9 @@
 
 #include "WiFiManager.h"
 
+int noWifi = 0;
+char *btnName = "_";
+
 WiFiManagerParameter::WiFiManagerParameter(const char *custom) {
   _id = NULL;
   _placeholder = NULL;
@@ -79,6 +82,14 @@ WiFiManager::~WiFiManager()
         DEBUG_WM(F("freeing allocated params!"));
         free(_params);
     }
+}
+
+
+void WiFiManager::enableNoWifiCustomMode(char *customName) {
+	noWifi = 1;
+	btnName = customName;
+	DEBUG_WM(F("No WiFi Mobile Custom Mode Enabled"));
+	
 }
 
 bool WiFiManager::addParameter(WiFiManagerParameter *p) {
@@ -238,19 +249,19 @@ boolean  WiFiManager::startConfigPortal(char const *apName, char const *apPasswo
 
       // if saving with no ssid filled in, reconnect to ssid
       // will not exit cp 
-      if(_ssid == ""){
+      if(_ssid == "" && noWifi == 0){
         DEBUG_WM(F("No ssid, skipping wifi"));
       }
       else{
         DEBUG_WM(F("Connecting to new AP"));
-        if (connectWifi(_ssid, _pass) != WL_CONNECTED) {
+        if (connectWifi(_ssid, _pass) == WL_CONNECTED) {  // ! removed////////////////////////////////
           delay(2000);
           // using user-provided  _ssid, _pass in place of system-stored ssid and pass
           DEBUG_WM(F("Failed to connect."));
         }
         else {
           //connected
-          WiFi.mode(WIFI_STA);
+          //WiFi.mode(WIFI_STA);/////////////////////////////////////////////////////////////////////////
           //notify that configuration has changed and any optional parameters should be saved
           if ( _savecallback != NULL) {
             //todo: check if any custom parameters actually exist, and check if they really changed maybe
@@ -311,7 +322,7 @@ int WiFiManager::connectWifi(String ssid, String pass) {
 
   wl_status_t res;
   //check if we have ssid and pass and force those, if not, try with last saved values
-  if (ssid != "") {
+  if (ssid != "" && noWifi == 0) {
     //trying to fix connection in progress hanging
     ETS_UART_INTR_DISABLE();
     wifi_station_disconnect();
@@ -322,7 +333,7 @@ int WiFiManager::connectWifi(String ssid, String pass) {
       DEBUG_WM(res);
     }
   } else {
-    if (WiFi.SSID() != "") {
+    if (WiFi.SSID() != "" and noWifi == 0) {
       DEBUG_WM(F("Using last saved values, should be faster"));
       //trying to fix connection in progress hanging
       ETS_UART_INTR_DISABLE();
@@ -459,10 +470,19 @@ void WiFiManager::handleRoot() {
   page += String(F("<h1>"));
   page += _apName;
   page += String(F("</h1>"));
-  page += String(F("<h3>WiFiManager</h3>"));
+  page += String(F("<h3> Niltech WiFiManager</h3>"));
+  
+  if(noWifi)
+  {
+  page += "<br/><form action=\"/0wifi\"method=\"get\"><button>";
+  page += btnName;
+  page += "</button></form><br/><form action=\"/i\"method=\"get\"><button>Info</button></form><br/><form action=\"/r\"method=\"post\"><button>Reset</button></form>";
+	}
+  else
+  {
   page += FPSTR(HTTP_PORTAL_OPTIONS);
+	}
   page += FPSTR(HTTP_END);
-
   server->sendHeader("Content-Length", String(page.length()));
   server->send(200, "text/html", page);
 
@@ -553,7 +573,16 @@ void WiFiManager::handleWifi(boolean scan) {
     }
   }
 
+  if(noWifi)
+  {
+	  page += "<form method='get'action='wifisave'><br/>";
+	  }
+  else
+  {
   page += FPSTR(HTTP_FORM_START);
+  }
+  
+  
   char parLength[5];
   // add the extra parameters to the form
   for (int i = 0; i < _paramsCount; i++) {
@@ -672,7 +701,15 @@ void WiFiManager::handleWifiSave() {
   page += FPSTR(HTTP_STYLE);
   page += _customHeadElement;
   page += FPSTR(HTTP_HEADER_END);
+  if(noWifi)
+  {
+	  page += "<div>Credentials Saved<br/>Restart the ESP.<br/>If it fails restart, reconnect to AP to try again</div>";
+
+  }
+  else
+  {
   page += FPSTR(HTTP_SAVED);
+  }
   page += FPSTR(HTTP_END);
 
   server->sendHeader("Content-Length", String(page.length()));
@@ -693,6 +730,10 @@ void WiFiManager::handleInfo() {
   page += FPSTR(HTTP_STYLE);
   page += _customHeadElement;
   page += FPSTR(HTTP_HEADER_END);
+  page += F("<dl>");
+  page += F("<dt>Made By</dt><dd>");
+  page += "Niltech Pvt Ltd - Hyderabad";
+  page += F("</dd>");
   page += F("<dl>");
   page += F("<dt>Chip ID</dt><dd>");
   page += ESP.getChipId();
@@ -845,3 +886,4 @@ String WiFiManager::toStringIp(IPAddress ip) {
   res += String(((ip >> 8 * 3)) & 0xFF);
   return res;
 }
+
